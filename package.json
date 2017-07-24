@@ -27,6 +27,7 @@
   "homepage": "https://github.com/sunrinJoule/joule-backend#readme",
   "dependencies": {
     "body-parser": "^1.17.2",
+    "cors": "^2.8.4",
     "debug": "^2.6.8",
     "express": "^4.15.3",
     "express-promise": "^0.4.0",

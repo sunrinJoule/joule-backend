@@ -9,9 +9,10 @@ import session from './middleware/session';
 
 import serveStatic from 'serve-static';
 import morgan from 'morgan';
+import cors from 'cors';
 
 import DataController from './dataController';
-import WebSocketAdapter from './network/webSocketAdapter';
+import WebSocketAdapter from './network/webSocket';
 
 import apiRouter from './api';
 import networkConfig from '../config/network.config';
@@ -34,6 +35,11 @@ const app = express();
 
 app.set('x-powered-by', false);
 
+// TODO Remove in production
+app.use(cors({
+  origin: (_, callback) => callback(null, true),
+  credentials: true,
+}));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(session);
 app.use(expressPromise());
