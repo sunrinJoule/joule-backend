@@ -125,15 +125,13 @@ export default class WebSocketAdapter {
         let requestOf = (data.meta || {}).requestOf;
         // Okay, send it.
         this.controller.postNetworkAction(data, userId).then(result => {
-          if (result != null && result.type != null) {
-            this.notifySocket(client, {
-              type: 'response/ok',
-              payload: result,
-              meta: {
-                responseOf: requestOf,
-              },
-            });
-          }
+          this.notifySocket(client, {
+            type: 'response/ok',
+            payload: result,
+            meta: {
+              responseOf: requestOf,
+            },
+          });
         }, e => {
           console.error(e.stack);
           this.notifySocket(client, {

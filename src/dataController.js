@@ -47,8 +47,11 @@ export default class DataController {
     // Calculate each queue's users.
     let prevUsers = listQueueUser(prevQueue);
     let currentUsers = listQueueUser(queue || {});
+    let prevManagers = prevQueue.manageUsers || [];
+    let currentManagers = (queue || {}).manageUsers || [];
     // Calculate union value of the array. Looks inefficient.
-    let concatUsers = prevUsers.concat(currentUsers);
+    let concatUsers = prevUsers.concat(currentUsers,
+      prevManagers, currentManagers);
     concatUsers.sort();
     let unionUsers = [];
     for (let i = 0; i < concatUsers.length; ++i) {
@@ -69,15 +72,26 @@ export default class DataController {
       let userRecord = this.users[user];
       userRecord.queues = userRecord.queues.filter(r => r !== id);
     });
+    let joinManagers = currentManagers.filter(v => !prevManagers.includes(v));
+    let leaveManagers = prevManagers.filter(v => !currentManagers.includes(v));
+    joinManagers.forEach(user => {
+      let userRecord = this.users[user];
+      userRecord.managingQueues.push(id);
+    });
+    leaveManagers.forEach(user => {
+      let userRecord = this.users[user];
+      userRecord.managingQueues =
+        userRecord.managingQueues.filter(r => r !== id);
+    });
     this.queues[id] = queue;
     unionUsers.forEach(user => {
       let userRecord = this.users[user];
       // Pour queue data into the soon-to-be-sent-to-the-client data.
       let pouredData = Object.assign({}, userRecord, {
-        queues: user.queues.map(queue => sanitizeQueueUser(
+        queues: userRecord.queues.map(queue => sanitizeQueueUser(
           this.queues[queue], userRecord)),
-        managingQueues: user.managingQueues.map(queue =>
-          sanitizeQueueManager(this.queues[queue], user)),
+        managingQueues: userRecord.managingQueues.map(queue =>
+          sanitizeQueueManager(this.queues[queue], userRecord)),
       });
       this.network.notifyUser(user, {
         type: 'state/update',
