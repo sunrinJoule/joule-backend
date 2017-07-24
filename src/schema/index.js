@@ -25,7 +25,8 @@ export function removeQueueUser(queue, user) {
 export function sanitizeQueueUser(queue, user) {
   let result = pick(queue, ['id', 'name', 'otp', 'useBells',
     'date']);
-  result.processTimeAvg = queue.processedTime / queue.processedUsers;
+  result.processTimeAvg =
+    (queue.processedTime / queue.processedUsers) || 0;
   result.queueUsers = queue.queues.length;
   let queuePos = queue.queues.indexOf(user.id);
   let lanePos = queue.lanes.findIndex(lane => lane.user === user.id);
@@ -35,7 +36,7 @@ export function sanitizeQueueUser(queue, user) {
   result.queueAfter = queue.queues.length - result.queueBefore - 1;
   result.userDisplayName = (queue.userAliases[user.id] || {}).displayName;
   result.lanes = queue.lanes.map(lane => Object.assign({}, lane, {
-    user: (queue.userData[user] || {}).displayName,
+    user: (queue.userData[lane.user] || {}).displayName,
   }));
   result.position = (() => {
     if (queuePos !== -1) return 'queue';
@@ -50,17 +51,17 @@ export function sanitizeQueueUser(queue, user) {
   return result;
 }
 
-export function sanitizeQueueManager(queue, user) {
+export function sanitizeQueueManager(queue) {
   return Object.assign({}, queue, {
-    processTimeAvg: queue.processedTime / queue.processedUsers,
+    processTimeAvg: (queue.processedTime / queue.processedUsers) || 0,
     manageUsers: undefined,
     queues: queue.queues.map(id => queue.userData[id].displayName),
     lanes: queue.lanes.map(lane => Object.assign({}, lane, {
-      user: (queue.userData[user] || {}).displayName,
+      user: (queue.userData[lane.user] || {}).displayName,
     })),
-    bells: queue.bells.map(bell => (queue.userData[user] || {})),
+    bells: queue.bells.map(bell => (queue.userData[bell] || {})),
     bellsProcessed: queue.bellsProcessed.map(bell =>
-      (queue.userData[user] || {}).displayName),
+      (queue.userData[bell] || {}).displayName),
     userData: undefined,
   });
 }

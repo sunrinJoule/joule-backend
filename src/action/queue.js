@@ -11,4 +11,8 @@ export const LEAVE_MANAGER = 'queue/leaveManager';
 export const CREATE_LANE = 'queue/createLane';
 export const RENAME_LANE = 'queue/renameLane';
 export const DELETE_LANE = 'queue/deleteLane';
+
 export const NEXT = 'queue/next';
+export const CONFIRM = 'queue/confirm';
+
+export const CONFIRM_BELL = 'queue/confirmBell';

@@ -7,6 +7,7 @@ import VisibleError from './util/visibleError';
 import { removeQueueUser, sanitizeQueueUser, sanitizeQueueManager }
   from './schema';
 import overwrite from './util/overwrite';
+import removeKey from './util/removeKey';
 
 export default class DataController {
   constructor(network, storage) {
@@ -60,7 +61,7 @@ const HANDLERS = {
       userId = randToken.suid(24);
       this.users[userId] = {
         id: userId,
-        queueResults: [],
+        queueResults: {},
         queues: [],
         managingQueues: [],
         notification: null,
@@ -221,7 +222,7 @@ const HANDLERS = {
     if (!queue.manageUsers.includes(userId)) {
       throw new VisibleError('Forbidden');
     }
-    const { id = 0, name = '대기열' } = action.payload || {};
+    const { id, name = '대기열' } = action.payload || {};
     let newQueue = Object.assign({}, queue, {
       lanes: queue.lanes.map((lane, i) => i === id ? Object.assign({}, lane, {
         name,
@@ -238,20 +239,88 @@ const HANDLERS = {
     if (!queue.manageUsers.includes(userId)) {
       throw new VisibleError('Forbidden');
     }
-    const { id = 0 } = action.payload || {};
+    const { id } = action.payload || {};
     // If there's an user in the lane, send them back to the queue.
     let lane = queue.lanes[id];
     if (lane == null) throw new VisibleError('Unknown lane ID');
-    let user = lane.user;
+    let laneUser = lane.user;
     // TODO Send notification
     let newQueue = Object.assign({}, queue, {
       lanes: queue.lanes.filter((lane, i) => i !== id),
-      queues: user == null ? queue.queues : [user].concat(queue.queues),
+      queues: laneUser == null ? queue.queues : [laneUser].concat(queue.queues),
     });
     this.updateQueue(queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
-  async [QueueActions.NEXT](action) {
-
+  async [QueueActions.NEXT](action, userId) {
+    // Check the user's validity.
+    let queue = this.queues[action.payload.id];
+    if (queue == null) throw new VisibleError('Cannot find the queue');
+    if (!queue.manageUsers.includes(userId)) {
+      throw new VisibleError('Forbidden');
+    }
+    const { laneId } = action.payload || {};
+    let lane = queue.lanes[laneId];
+    if (lane == null) throw new VisibleError('Unknown lane ID');
+    // This cannot be used if the lane is not empty.
+    if (lane.user != null) throw new VisibleError('User is already present');
+    // Pull one user from the queue.
+    let user = queue.queues[0];
+    if (user == null) throw new VisibleError('Queue is empty');
+    // Assign user to it
+    let newQueue = Object.assign({}, queue, {
+      queues: queue.queues.slice(1),
+      lanes: queue.lanes.map((v, i) => i === laneId ? Object.assign({}, v, {
+        date: Date.now(),
+        user,
+      }) : v),
+    });
+    this.updateQueue(queue.id, newQueue);
+    return sanitizeQueueManager(newQueue);
+  },
+  async [QueueActions.CONFIRM](action, userId) {
+    // Check the user's validity.
+    let queue = this.queues[action.payload.id];
+    if (queue == null) throw new VisibleError('Cannot find the queue');
+    if (!queue.manageUsers.includes(userId)) {
+      throw new VisibleError('Forbidden');
+    }
+    // We can mark the user that they have succeeded or failed, to try the
+    // request again later. If bells are in use, continue the user in the bell
+    // mode.
+    const { laneId, success, description } = action.payload || {};
+    let lane = queue.lanes[laneId];
+    if (lane == null) throw new VisibleError('Unknown lane ID');
+    let user = lane.user;
+    if (user == null) throw new VisibleError('Lane is empty');
+    // Update the processedTime / processedUsers metrics.
+    let processedTime = queue.processedTime + Date.now() - lane.date;
+    // Remove user from the table.
+    let newQueue = Object.assign({}, queue, {
+      processedTime,
+      processedUsers: queue.processedUsers + 1,
+      lanes: queue.lanes.map((v, i) => i === laneId ? Object.assign({}, v, {
+        user: null,
+      }) : v),
+    });
+    if (queue.useBells && success) {
+      // Add the user into the bells.
+      newQueue.userData = Object.assign({}, newQueue.userData, {
+        [user]: Object.assign({}, newQueue.userData[user], {
+          description,
+        }),
+      });
+      newQueue.bells = newQueue.bells.concat(user);
+    } else {
+      newQueue.userData = removeKey(newQueue.userData, user);
+      // Mark the result - set the user's queueResults.
+      this.users[user].queueResults[action.payload.id] = {
+        success,
+        date: Date.now(),
+      };
+      // Dun
+    }
+    this.updateQueue(queue.id, newQueue);
+    return sanitizeQueueManager(newQueue);
   },
 };
