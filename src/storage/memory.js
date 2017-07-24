@@ -15,7 +15,7 @@ export default class MemoryStorage {
   async getUser(id) {
 
   }
-async createUser(data) {
+  async createUser(data) {
 
   }
   async updateUser(id, data) {

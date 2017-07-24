@@ -57,10 +57,10 @@ export default class WebSocketAdapter {
       let result = await this.controller.postNetworkAction({
         type: NetworkActions.CONNECT,
         payload: {
-          userId: req.session.id,
+          userId: req.session.userId,
           // Nothing is required yet. :P
         },
-      }, req.session.id);
+      }, req.session.userId);
       // Check aliveness of the socket. This is due to the nature of
       // asynchronous processing... :(
       if (!alive) return;
@@ -69,8 +69,8 @@ export default class WebSocketAdapter {
         type: 'response/handshake',
         payload: result,
       });
-      if (userId !== req.session.id) {
-        req.session.id = userId;
+      if (userId !== req.session.userId) {
+        req.session.userId = userId;
         req.session.save(() => {});
       }
       // Register it to the sockets list.

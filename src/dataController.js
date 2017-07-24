@@ -123,7 +123,8 @@ const HANDLERS = {
   },
   async [QueueActions.CREATE](action, userId) {
     const { name = '대기열', otp = true, useBells = false,
-      lanes = ['창구 1'] } = action.payload || {};
+      lanes = ['창구 1'], paused = false, notice = null,
+    } = action.payload || {};
     let queue = {
       id: randToken.suid(6),
       name,
@@ -144,6 +145,8 @@ const HANDLERS = {
       // This is for the internal representation.
       userData: {},
       userCount: 0,
+      paused,
+      notice,
       date: Date.now(),
     };
     let user = this.users[userId];
@@ -170,8 +173,9 @@ const HANDLERS = {
     if (!queue.manageUsers.includes(userId)) {
       throw new VisibleError('Forbidden');
     }
-    const { name, otp, useBells } = action.payload || {};
-    let newQueue = overwrite(queue, { name, otp, useBells });
+    const { name, otp, useBells, paused, notice } = action.payload || {};
+    let newQueue = overwrite(queue, { name, otp, useBells, paused });
+    if (notice !== undefined) newQueue.notice = notice;
     this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
@@ -184,6 +188,9 @@ const HANDLERS = {
     if (queue == null) throw new VisibleError('Cannot find the queue');
     if (!user.queues.includes(queue.id)) {
       throw new VisibleError('Already joined');
+    }
+    if (queue.paused) {
+      throw new VisibleError('Queue is not accepting new users');
     }
     // TODO Check OTP validity
     // Tada! Add the user to the queue. Assign the user random number too.
@@ -263,11 +270,10 @@ const HANDLERS = {
     if (!queue.manageUsers.includes(userId)) {
       throw new VisibleError('Forbidden');
     }
-    const { id, name = '대기열' } = action.payload || {};
+    const { laneId, name = '대기열' } = action.payload || {};
     let newQueue = Object.assign({}, queue, {
-      lanes: queue.lanes.map((lane, i) => i === id ? Object.assign({}, lane, {
-        name,
-      }) : lane),
+      lanes: queue.lanes.map((lane, i) => i === laneId
+        ? Object.assign({}, lane, { name }) : lane),
     });
     this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
@@ -280,14 +286,14 @@ const HANDLERS = {
     if (!queue.manageUsers.includes(userId)) {
       throw new VisibleError('Forbidden');
     }
-    const { id } = action.payload || {};
+    const { laneId } = action.payload || {};
     // If there's an user in the lane, send them back to the queue.
-    let lane = queue.lanes[id];
+    let lane = queue.lanes[laneId];
     if (lane == null) throw new VisibleError('Unknown lane ID');
     let laneUser = lane.user;
     // TODO Send notification
     let newQueue = Object.assign({}, queue, {
-      lanes: queue.lanes.filter((lane, i) => i !== id),
+      lanes: queue.lanes.filter((lane, i) => i !== laneId),
       queues: laneUser == null ? queue.queues : [laneUser].concat(queue.queues),
     });
     this.updateQueue(action, queue.id, newQueue);
@@ -361,6 +367,28 @@ const HANDLERS = {
       };
       // Dun
     }
+    this.updateQueue(action, queue.id, newQueue);
+    return sanitizeQueueManager(newQueue);
+  },
+  async [QueueActions.CONFIRM_BELL](action, userId) {
+    // Check the user's validity.
+    let queue = this.queues[action.payload.id];
+    if (queue == null) throw new VisibleError('Cannot find the queue');
+    if (!queue.manageUsers.includes(userId)) {
+      throw new VisibleError('Forbidden');
+    }
+    // Find and remove the user from bells list.
+    const { userId: user, success } = action.payload || {};
+    if (!queue.bells.includes(user)) throw new VisibleError('Unknown user');
+    let newQueue = Object.assign({}, queue, {
+      bells: queue.bells.filter(v => v !== user),
+      bellsProcessed: [user].concat(queue.bellsProcessed.slice(0, 9)),
+    });
+    newQueue.userData = removeKey(newQueue.userData, user);
+    this.users[user].queueResults[action.payload.id] = {
+      success,
+      date: Date.now(),
+    };
     this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue);
   },
