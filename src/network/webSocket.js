@@ -1,5 +1,7 @@
-import * as NetworkActions from './action/network';
+import * as NetworkActions from '../action/network';
 import session from '../middleware/session';
+
+import VisibleError from '../util/visibleError';
 
 export default class WebSocketAdapter {
   // Since the ws's server requires verifyClient option to be present, we
@@ -51,6 +53,7 @@ export default class WebSocketAdapter {
         alive = false;
       };
       // Notify the data controller.
+      // TODO connection action could fail.
       let result = await this.controller.postNetworkAction({
         type: NetworkActions.CONNECT,
         payload: {
@@ -58,10 +61,14 @@ export default class WebSocketAdapter {
           // Nothing is required yet. :P
         },
       }, req.session.id);
-      let { id: userId } = result;
       // Check aliveness of the socket. This is due to the nature of
       // asynchronous processing... :(
       if (!alive) return;
+      let { id: userId } = result;
+      this.notifySocket(client, {
+        type: 'response/handshake',
+        payload: result,
+      });
       if (userId !== req.session.id) {
         req.session.id = userId;
         req.session.save(() => {});
@@ -119,19 +126,21 @@ export default class WebSocketAdapter {
         // Okay, send it.
         this.controller.postNetworkAction(data, userId).then(result => {
           if (result != null && result.type != null) {
-            this.notifySocket(client, Object.assign({}, result, {
-              meta: Object.assign({}, result.meta, {
-                // We have this to support Promises in the client.
+            this.notifySocket(client, {
+              type: 'response/ok',
+              payload: result,
+              meta: {
                 responseOf: requestOf,
-              }),
-            }));
+              },
+            });
           }
         }, e => {
-          console.error(e);
+          console.error(e.stack);
           this.notifySocket(client, {
-            type: 'request/error',
+            type: 'response/error',
             payload: {
-              message: 'A server error has been occurred.',
+              message: (e instanceof VisibleError) ? e.message
+                : 'A server error has been occurred.',
             },
             meta: {
               responseOf: requestOf,
