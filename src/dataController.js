@@ -20,6 +20,7 @@ export default class DataController {
     this.users = {};
   }
   async postNetworkAction(action, userId) {
+    console.log(action);
     // An action is sent; process it.
     // First, check the validity of the action, reject if the request is not
     // coming from right users.
