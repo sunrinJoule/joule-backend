@@ -4,6 +4,15 @@ function pick(input, keys) {
   return output;
 }
 
+export function listQueueUser(queue) {
+  // Hmm
+  let users = (queue.queues || []).slice();
+  (queue.bells || []).forEach(v => users.push(v));
+  (queue.bellsProcessed || []).forEach(v => users.push(v));
+  (queue.lanes || []).forEach(lane => lane.user && users.push(lane.user));
+  return users;
+}
+
 export function removeQueueUser(queue, user) {
   let result = Object.assign({}, queue);
   let queuePos = queue.queues.indexOf(user.id);

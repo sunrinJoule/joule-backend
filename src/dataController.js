@@ -4,8 +4,8 @@ import * as NetworkActions from './action/network';
 import * as QueueActions from './action/queue';
 
 import VisibleError from './util/visibleError';
-import { removeQueueUser, sanitizeQueueUser, sanitizeQueueManager }
-  from './schema';
+import { listQueueUser, removeQueueUser, sanitizeQueueUser,
+  sanitizeQueueManager } from './schema';
 import overwrite from './util/overwrite';
 import removeKey from './util/removeKey';
 
@@ -35,16 +35,55 @@ export default class DataController {
     }
     return handler.call(this, action, userId);
   }
-  updateQueue(id, queue) {
+  updateQueue(action, id, queue) {
     // We need to send the update to users associated with the user, users
     // before the queue has changed, users after the queue has changed. Since
     // other users doesn't even have to know about it - it'll be fine.
     // In other words, listeners = (beforeUsers | afterUsers) & onlineUsers
     // Notification should be sent to previous user in the queue - but that
     // should be done in the action routine.
-  }
-  updateUser(user) {
-    // Obviously if the user has changed, send the event to that user.
+    let prevQueue = this.queues[id] || {};
+    // Calculate each queue's users.
+    let prevUsers = listQueueUser(prevQueue);
+    let currentUsers = listQueueUser(queue || {});
+    // Calculate union value of the array. Looks inefficient.
+    let concatUsers = prevUsers.concat(currentUsers);
+    concatUsers.sort();
+    let unionUsers = [];
+    for (let i = 0; i < concatUsers.length; ++i) {
+      if (concatUsers[i] === concatUsers[i - 1]) continue;
+      unionUsers.push(concatUsers[i]);
+    }
+    // OK! Now, calculate 'joining' users and 'departing' users.
+    // I'm lazy - let's use O(n^2). Whatever!
+    let joinUsers = currentUsers.filter(v => !prevUsers.includes(v));
+    let leaveUsers = prevUsers.filter(v => !currentUsers.includes(v));
+    // Now, update join / leave users.
+    joinUsers.forEach(user => {
+      let userRecord = this.users[user];
+      userRecord.queues.push(id);
+      userRecord.queueRecords[id] = undefined;
+    });
+    leaveUsers.forEach(user => {
+      let userRecord = this.users[user];
+      userRecord.queues = userRecord.queues.filter(r => r !== id);
+    });
+    this.queues[id] = queue;
+    unionUsers.forEach(user => {
+      let userRecord = this.users[user];
+      // Pour queue data into the soon-to-be-sent-to-the-client data.
+      let pouredData = Object.assign({}, userRecord, {
+        queues: user.queues.map(queue => sanitizeQueueUser(
+          this.queues[queue], userRecord)),
+        managingQueues: user.managingQueues.map(queue =>
+          sanitizeQueueManager(this.queues[queue], user)),
+      });
+      this.network.notifyUser(user, {
+        type: 'state/update',
+        payload: pouredData,
+      });
+      this.network.notifyUser(user, action);
+    });
   }
 }
 
@@ -70,9 +109,10 @@ const HANDLERS = {
     let user = this.users[userId];
     // Pour queue data into the soon-to-be-sent-to-the-client data.
     let pouredData = Object.assign({}, user, {
-      queues: user.queues.map(queue => sanitizeQueueUser(queue, user)),
+      queues: user.queues.map(queue => sanitizeQueueUser(
+        this.queues[queue], user)),
       managingQueues: user.managingQueues.map(queue =>
-        sanitizeQueueManager(queue, user)),
+        sanitizeQueueManager(this.queues[queue], user)),
     });
     return pouredData;
   },
@@ -107,7 +147,7 @@ const HANDLERS = {
     };
     let user = this.users[userId];
     // TODO Queue ID may conflict
-    this.updateQueue(queue.id, queue);
+    this.updateQueue(action, queue.id, queue);
     return sanitizeQueueManager(queue, user);
   },
   async [QueueActions.DELETE](action, userId) {
@@ -118,7 +158,7 @@ const HANDLERS = {
       throw new VisibleError('Forbidden');
     }
     // :/
-    this.updateQueue(queue.id, undefined);
+    this.updateQueue(action, queue.id, undefined);
     return undefined;
   },
   async [QueueActions.UPDATE](action, userId) {
@@ -131,7 +171,7 @@ const HANDLERS = {
     }
     const { name, otp, useBells } = action.payload || {};
     let newQueue = overwrite(queue, { name, otp, useBells });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
   async [QueueActions.JOIN](action, userId) {
@@ -156,7 +196,7 @@ const HANDLERS = {
       }),
       queues: queue.queues.concat(user.id),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueUser(newQueue, user);
   },
   async [QueueActions.LEAVE](action, userId) {
@@ -174,7 +214,7 @@ const HANDLERS = {
     }
     // Remove the user. 
     let newQueue = removeQueueUser(queue, user);
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueUser(newQueue, user);
   },
   async [QueueActions.JOIN_MANAGER](action, userId) {
@@ -191,7 +231,7 @@ const HANDLERS = {
     let newQueue = Object.assign({}, queue, {
       manageUsers: queue.manageUsers.concat(user.id),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueUser(newQueue, user);
   },
   async [QueueActions.LEAVE_MANAGER](action) {
@@ -211,7 +251,7 @@ const HANDLERS = {
         name, date: 0, user: null,
       }),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
   async [QueueActions.RENAME_LANE](action, userId) {
@@ -228,7 +268,7 @@ const HANDLERS = {
         name,
       }) : lane),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
   async [QueueActions.DELETE_LANE](action, userId) {
@@ -249,7 +289,7 @@ const HANDLERS = {
       lanes: queue.lanes.filter((lane, i) => i !== id),
       queues: laneUser == null ? queue.queues : [laneUser].concat(queue.queues),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue, user);
   },
   async [QueueActions.NEXT](action, userId) {
@@ -275,7 +315,7 @@ const HANDLERS = {
         user,
       }) : v),
     });
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue);
   },
   async [QueueActions.CONFIRM](action, userId) {
@@ -320,7 +360,7 @@ const HANDLERS = {
       };
       // Dun
     }
-    this.updateQueue(queue.id, newQueue);
+    this.updateQueue(action, queue.id, newQueue);
     return sanitizeQueueManager(newQueue);
   },
 };
