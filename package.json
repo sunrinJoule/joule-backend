@@ -1,0 +1,58 @@
+{
+  "name": "joule-backend",
+  "version": "0.0.1",
+  "description": "Joule Node.js backend",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "npm run jest && npm run lint",
+    "jest": "jest",
+    "jestWatch": "jest --watch --notify",
+    "build": "babel src -d lib --copy-files",
+    "lint": "eslint src/"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunrinJoule/joule-backend.git"
+  },
+  "author": "yoo2001818",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sunrinJoule/joule-backend/issues"
+  },
+  "homepage": "https://github.com/sunrinJoule/joule-backend#readme",
+  "dependencies": {
+    "body-parser": "^1.17.2",
+    "debug": "^2.6.8",
+    "express": "^4.15.3",
+    "express-promise": "^0.4.0",
+    "express-session": "^1.15.4",
+    "morgan": "^1.8.2",
+    "serve-static": "^1.12.3",
+    "ws": "^3.0.0"
+  },
+  "devDependencies": {
+    "babel-core": "^6.25.0",
+    "babel-eslint": "^7.2.3",
+    "babel-jest": "^20.0.3",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-react": "^6.24.1",
+    "babel-register": "^6.24.1",
+    "eslint": "^4.2.0",
+    "eslint-config-semistandard": "^11.0.0",
+    "eslint-config-standard": "^10.2.1",
+    "eslint-config-standard-jsx": "^4.0.2",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^5.1.1",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-react": "^7.1.0",
+    "eslint-plugin-standard": "^3.0.1",
+    "jest": "^20.0.4",
+    "jest-cli": "^20.0.4"
+  },
+  "optionalDependencies": {}
+}
