@@ -43,7 +43,8 @@ export function sanitizeQueueUser(queue, user) {
   let bellProcessPos = queue.bellsProcessed.indexOf(user.id);
   result.queueBefore = Math.max(queuePos, 0);
   result.queueAfter = queue.queues.length - result.queueBefore - 1;
-  result.userDisplayName = (queue.userAliases[user.id] || {}).displayName;
+  result.userDate = (queue.userData[user.id] || {}).date;
+  result.userDisplayName = (queue.userData[user.id] || {}).displayName;
   result.lanes = queue.lanes.map(lane => Object.assign({}, lane, {
     user: (queue.userData[lane.user] || {}).displayName,
   }));

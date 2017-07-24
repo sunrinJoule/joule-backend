@@ -66,7 +66,7 @@ export default class DataController {
     joinUsers.forEach(user => {
       let userRecord = this.users[user];
       userRecord.queues.push(id);
-      userRecord.queueRecords[id] = undefined;
+      userRecord.queueResults[id] = undefined;
     });
     leaveUsers.forEach(user => {
       let userRecord = this.users[user];
@@ -200,7 +200,7 @@ const HANDLERS = {
     let queue = this.queues[action.payload.id];
     let user = this.users[userId];
     if (queue == null) throw new VisibleError('Cannot find the queue');
-    if (!user.queues.includes(queue.id)) {
+    if (user.queues.includes(queue.id)) {
       throw new VisibleError('Already joined');
     }
     if (queue.paused) {
